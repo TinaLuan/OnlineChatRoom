@@ -1,5 +1,14 @@
 package Protocol;
 
+import java.security.Key;
+import java.security.KeyFactory;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.NoSuchAlgorithmException;
+import java.security.spec.InvalidKeySpecException;
+import java.security.spec.RSAPrivateKeySpec;
+import java.security.spec.RSAPublicKeySpec;
+
 public class SimpleProtocol implements Protocol {
 	
 	private static String escape(String str){
@@ -27,8 +36,7 @@ public class SimpleProtocol implements Protocol {
 	}
 	
 	public String[] decodeMessage(String str) {
-		if (str != null && !str.equals("null"))
-			System.out.println("receive: " + str);
+		System.out.println("receive: " + str);
 		if(str == null || str.equals("")){
 			return new String[0];
 		}
@@ -40,14 +48,6 @@ public class SimpleProtocol implements Protocol {
 			return new String[0];
 		}
 		return messages;
-	}
-
-	public static void main(String[] args) {
-		Protocol protocol = new SimpleProtocol();
-		String[] strings = protocol.decodeMessage(protocol.createMessage("_aaaa_", "bbbb", "cccc", "dddd"));
-		for(String str:strings){
-			System.out.println(str);
-		}
 	}
 
 }

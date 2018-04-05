@@ -1,144 +1,166 @@
-/*
- * Tian Luan 1899271
- * based on given code
- */
 package ChatServer;
+
 import java.io.BufferedReader;
+import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.io.PrintWriter;
 import java.net.Socket;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
+import java.security.InvalidKeyException;
+import java.security.Key;
+import java.security.NoSuchAlgorithmException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.Base64;
+import java.util.Date;
 
+import javax.crypto.BadPaddingException;
+import javax.crypto.Cipher;
+import javax.crypto.IllegalBlockSizeException;
+import javax.crypto.NoSuchPaddingException;
+import javax.crypto.spec.SecretKeySpec;
+
+import Protocol.KeyTool;
+import Protocol.Protocol;
 import Protocol.SimpleProtocol;
 
 public class Handler implements Runnable{
 	
-	private Socket socket;
-	private SimpleProtocol protocol = new SimpleProtocol();		// pack and unpack messages
+	private Socket socket = null;
+	private Protocol protocol = new SimpleProtocol();
+	private BufferedReader in;
+	private DataOutputStream out;
+	private Server server;
+	private String username;
+	private Key key2;
 	
 	public Handler(Socket socket) {
-		super();
 		this.socket = socket;
 	}
 	
-	private HashMap<String, String> accounts;
-	private ArrayList<Message> msgList;
-	private String currentUserName = null;
-	
-	public Handler(Socket socket, HashMap<String, String> accounts, ArrayList<Message> msgList) {
-		this(socket);
-		this.accounts = accounts;
-		this.msgList = msgList;
+	public void sendToClient(String... args){
+		try {
+			Cipher cipher = Cipher.getInstance("AES");
+			cipher.init(Cipher.ENCRYPT_MODE, key2);
+			String msg = protocol.createMessage(args);
+			
+			byte[] decrpyted = cipher.doFinal(msg.getBytes());
+			String finalMsg = Base64.getEncoder().encodeToString(decrpyted);
+			out.writeBytes(finalMsg + "\n");
+			
+		} catch (IOException | InvalidKeyException | NoSuchAlgorithmException | NoSuchPaddingException | IllegalBlockSizeException | BadPaddingException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
 	}
+	
+	public String[] getFromClient() throws Exception{
+		String msg = in.readLine();
+		
+		Cipher cipher = Cipher.getInstance("AES");
+		cipher.init(Cipher.DECRYPT_MODE, key2);
 
+		byte[] msgBytes = Base64.getDecoder().decode(msg);
+		byte[] decrypted = cipher.doFinal(msgBytes);
+		String str = new String(decrypted);
+		return protocol.decodeMessage(str) ;
+	}
 
 	@Override
 	public void run() {
-		System.out.println("Starting handler...");
 		try {
-			// creates reader/writer pairs.
-			PrintWriter toClient = new PrintWriter(socket.getOutputStream());
-			BufferedReader fromClient = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+			in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+			out = new DataOutputStream(socket.getOutputStream());
+			server = Server.getInstance();
 			
-			String response = "";
+			// To do: Key exchange
+			// Remove the following line
+			//out.writeBytes(new SimpleProtocol().createMessage("welcome", "welcome") + "\n");
+			String key1Str = in.readLine();
+			byte[] key1bytes = Base64.getDecoder().decode(key1Str);
+			Cipher cipherRSA = Cipher.getInstance("RSA");
+			cipherRSA.init(Cipher.DECRYPT_MODE, KeyTool.getRSAPrivateKey());
+			byte[] key1Dec = cipherRSA.doFinal(key1bytes);
+			Key key1  = new SecretKeySpec(key1Dec, "AES");
 			
-			while(true) {
-
-				String read = fromClient.readLine();
-
-				String[] request = protocol.decodeMessage(read);
-
-				
-				if (request == null || request.length < 1) {
-					toClient.println(response);
-					toClient.flush();
-				}else{
-					String reqType = request[0];
-					switch (reqType) {
-					case "sign-in":
-						response = signin(request);
-						break;
-					case "sign-up":
-						response = signup(request);
-						break;
-					case "get-message":
-						response = getMessage(request);
-						break;
-					case "send-message":
-						response = sendMessage(request);
-						break;
-					default:
+			Cipher cipherAES = Cipher.getInstance("AES");
+			cipherAES.init(Cipher.ENCRYPT_MODE, key1);
+			key2 = KeyTool.getAESKey();
+			byte[] key2bytes = cipherAES.doFinal(key2.getEncoded());
+			String key2RSA_base64 = Base64.getEncoder().encodeToString(key2bytes);
+			out.writeBytes(key2RSA_base64 + "\n");
+			
+			
+			// Sign in or create account
+			String[] message = getFromClient();
+			switch(message[0]){
+				case "sign-in":{
+						if(server.users.containsKey(message[1])){
+							if(server.users.get(message[1]).equals(message[2])){
+								this.username = message[1];
+								sendToClient("sign-in", "true", "welcome");
+							}else{
+								sendToClient("sign-in", "false", "Username and password do not match");
+								return;
+							}
+						}else{
+							sendToClient("sign-in", "false", "Username does not exist");
+							return;
+						}
 						break;
 					}
-					
-					toClient.println(response);
-					toClient.flush();
+				case "sign-up":{
+					if(false == server.users.containsKey(message[1])){
+						server.users.put(message[1], message[2]);
+						sendToClient("sign-up","true","Registration successfully!");
+					}else{
+						sendToClient("sign-up", "false", "Username exists.");
+					}
+					return;
 				}
-
+				default: return;
 			}
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
-					
-	}
-	
-	
-	private String signin(String[] request) {
-		String userName = request[1], password = request[2];
-		if ( ! accounts.containsKey(userName))
-			return protocol.createMessage("sign-in", "false", "The username doesn't exist");
-		if (! accounts.get(userName).equals(password))
-			return protocol.createMessage("sign-in", "false", "The password doesn't match username");
-		currentUserName = userName;
-		return protocol.createMessage("sign-in", "true", "Welcome back, "+ userName);
-	}
-	
-	private String signup(String[] request) {
-		String userName = request[1], password = request[2];
-		String boolStr = "false", msg = "";
-		if (  accounts.containsKey(userName)) 
-			msg = "The username has been taken";
-		else if (userName.length() > Server.USERNAME_MAX_LEN || userName.length() < Server.USERNAME_MIN_LEN) 
-			msg = "The username must be between 5 and 20 chars long";
-		else if (password.length() > Server.PASSWORD_MAX_LEN || password.length() < Server.PASSWORD_MIN_LEN)
-			msg = "The password must be between 8 and 32 chars long";
-		else {
-			accounts.put(userName, password);
-			boolStr = "true";
-			msg ="Sign-up Succeeded";
-		}
+			SimpleDateFormat dFormat = new SimpleDateFormat("hh:mm");
+			while(true){
+				message = getFromClient();
+				switch(message[0]){
+					case "send-message":{
+							server.messages.add(new Message(username, new Date(), message[1]));
+							sendToClient("send-message","true","ok!");
+							break;
+						}
+					case "get-message":{
+							int offset = Integer.parseInt(message[1]);
+							if(offset < -1) offset = -1;
+							ArrayList<String> newMessages = new ArrayList<>();
+							newMessages.add("get-message");
+							for(int i=offset+1; i<server.messages.size();i++){
+								newMessages.add(Integer.toString(i));
+								newMessages.add(server.messages.get(i).getUsername());
+								newMessages.add(dFormat.format(server.messages.get(i).getTimestamp()));
+								newMessages.add(server.messages.get(i).getContent());
+							}
+							if(newMessages.size() < 1){
+								out.writeBytes("\n");
+							}
+							sendToClient(newMessages.toArray(new String[newMessages.size()]));
+							break;
+						}
+					default: return;
+				}
+			}
+			
+			
 
-		return protocol.createMessage("sign-up", boolStr, msg);
-	}
-	
-	private String getMessage(String[] request) {
-		
-		int offset = Integer.parseInt(request[1]);
-		String response = protocol.createMessage("get-message");
-		for (int i = offset+1; i < msgList.size(); i++) {
-			Message oneMsg = msgList.get(i);
-			response += protocol.createMessage("", String.valueOf(i), oneMsg.getUserName(), oneMsg.getTime(), oneMsg.getContent());
-		}
-		return response;
-	}
-	
-	private String sendMessage(String[] request) {
-		if (request.length > 1 && !request[1].equals("")) {
-			String offset = String.valueOf(msgList.size());
-			
-			// get time
-			DateTimeFormatter dtf = DateTimeFormatter.ofPattern("mm:ss");
-			LocalDateTime now = LocalDateTime.now();
-			
-			Message newMsg = new Message(offset, currentUserName,  dtf.format(now), request[1]);
-			msgList.add(newMsg);
-			return protocol.createMessage("send-message", "true", offset);
-		} else {
-			return protocol.createMessage("send-message", "false", "Msg contenct can't be empty");
+		} catch (Exception e) {
+			try {
+				socket.close();
+				e.printStackTrace();
+				return;
+			} catch (IOException e1) {
+				// TODO Auto-generated catch block
+				e1.printStackTrace();
+			}
 		}
 	}
+	
 }

@@ -1,38 +1,28 @@
-/*
- * Tian Luan 1899271
- */
 package ChatServer;
 
+import java.util.Date;
+
 public class Message {
-	private String offset;
-	private String userName;
-	private String time;
+	private String username;
+	private Date timestamp;
 	private String content;
 	
-	public Message(String offset, String userName, String time, String content) {
-		this.offset = offset;
-		this.userName = userName;
-		this.time = time;
+	public Message(String username, Date timestamp, String content) {
+		this.username = username;
+		this.timestamp = timestamp;
 		this.content = content;
 	}
-	
-	public String getOffset() {
-		return offset;
+	public String getUsername() {
+		return username;
 	}
-	public void setOffset(String offset) {
-		this.offset = offset;
+	public void setUsername(String username) {
+		this.username = username;
 	}
-	public String getUserName() {
-		return userName;
+	public Date getTimestamp() {
+		return timestamp;
 	}
-	public void setUserName(String userName) {
-		this.userName = userName;
-	}
-	public String getTime() {
-		return time;
-	}
-	public void setTime(String time) {
-		this.time = time;
+	public void setTimestamp(Date timestamp) {
+		this.timestamp = timestamp;
 	}
 	public String getContent() {
 		return content;
@@ -40,5 +30,5 @@ public class Message {
 	public void setContent(String content) {
 		this.content = content;
 	}
-	
+
 }
