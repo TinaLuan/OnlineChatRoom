@@ -27,12 +27,12 @@ public class Server {
 	private static ArrayList<Message> msgList = new ArrayList<>();
 	
 	public static void main(String[] args) {
+		System.out.println("In server");
+		final int port = 2222;
+		final String address = "localhost";
 		
-//		final int port = 2222;
-//		final String address = "localhost";
-		
-		final String address = args[0];
-		final int port = Integer.parseInt(args[1]);
+//		final String address = args[0];
+//		final int port = Integer.parseInt(args[1]);
 		
 		ServerSocket serverSocket = null;
 		try {

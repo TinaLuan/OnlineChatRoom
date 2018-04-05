@@ -27,7 +27,8 @@ public class SimpleProtocol implements Protocol {
 	}
 	
 	public String[] decodeMessage(String str) {
-		System.out.println("receive: " + str);
+		if (str != null && !str.equals("null"))
+			System.out.println("receive: " + str);
 		if(str == null || str.equals("")){
 			return new String[0];
 		}
